@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Cpu, Wifi, Battery, HardDrive, Activity, Terminal, Shield, Globe } from "lucide-react";
+import { Cpu, Wifi, Battery, HardDrive, Activity, Shield } from "lucide-react";
 
 export default function Sys({ onExit }) {
   const [scanning, setScanning] = useState(false);
@@ -61,16 +61,16 @@ export default function Sys({ onExit }) {
         <StatCard icon={<Shield/>} label="Security" value="Active" sub="Firewall On" color="text-yellow-400"/>
       </div>
 
-      {/* DIAGNOSTICS CONSOLE */}
+      {/* DIAGNOSTICS CONSOLE - FIXED: Replaced > with &gt; */}
       <div className="bg-[#0f0f0f] border border-white/10 rounded-xl p-4 font-mono text-xs text-gray-400 h-40 overflow-hidden relative">
           <div className="absolute top-2 right-2 px-2 py-1 bg-white/5 rounded text-[10px]">CONSOLE</div>
           {scanning ? (
               <div className="space-y-1 text-green-400">
-                  <div>> INIT DIAGNOSTIC SEQUENCE...</div>
-                  <div>> CHECKING INTEGRITY... OK</div>
-                  <div>> MEMORY TEST... PASS</div>
-                  <div>> PINGING GATEWAY... 1ms</div>
-                  <div className="animate-pulse">> ANALYZING HEURISTICS...</div>
+                  <div>&gt; INIT DIAGNOSTIC SEQUENCE...</div>
+                  <div>&gt; CHECKING INTEGRITY... OK</div>
+                  <div>&gt; MEMORY TEST... PASS</div>
+                  <div>&gt; PINGING GATEWAY... 1ms</div>
+                  <div className="animate-pulse">&gt; ANALYZING HEURISTICS...</div>
               </div>
           ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3">
