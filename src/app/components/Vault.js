@@ -1,373 +1,309 @@
 "use client";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { 
-  HardDrive, Folder, FileText, Image as ImageIcon, MoreVertical, 
-  Plus, Upload, Trash2, X, Download, ShieldCheck, Lock, Unlock,
-  Grid, List, Search, Star, Clock, ChevronRight, ArrowLeft, Info,
-  File, Video, Music
+  HardDrive, File, FileText, Music, Video, Image as ImageIcon, 
+  MoreVertical, Star, Clock, Cloud, Menu, X, Plus, Search,
+  ChevronRight, Settings, Download, Trash2, Shield, Filter, SortAsc
 } from "lucide-react";
 
 export default function Vault() {
-  // --- STATE ---
+  // --- STATE MANAGEMENT ---
   const [files, setFiles] = useState([]);
-  const [currentFolder, setCurrentFolder] = useState("root"); // ID of current folder
-  const [view, setView] = useState("grid"); // grid | list
-  const [selectedId, setSelectedId] = useState(null);
-  const [navSection, setNavSection] = useState("files"); // files | recent | starred | trash
-  const [uploading, setUploading] = useState(false);
-  const [search, setSearch] = useState("");
-  const fileInputRef = useRef(null);
+  const [activeCategory, setActiveCategory] = useState("All");
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("date"); // date | name | size
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, fileId: null });
+  const [storageStats, setStorageStats] = useState({ used: 64.2, total: 128 }); 
 
-  // --- INIT & PERSISTENCE ---
+  // --- INITIALIZATION ---
   useEffect(() => {
-    const saved = localStorage.getItem("soumo_vault_pro");
-    if (saved) {
-      setFiles(JSON.parse(saved));
-    } else {
-      const defaults = [
-        { id: "root", name: "My Vault", type: "folder", parentId: null, date: new Date().toISOString() },
-        { id: "f1", name: "Documents", type: "folder", parentId: "root", date: new Date().toISOString() },
-        { id: "f2", name: "Images", type: "folder", parentId: "root", date: new Date().toISOString() },
-        { id: "doc1", name: "Project_Alpha.txt", type: "text/plain", size: 2400, parentId: "f1", date: new Date().toISOString(), content: "Confidential Project Data..." },
-      ];
-      setFiles(defaults);
-      localStorage.setItem("soumo_vault_pro", JSON.stringify(defaults));
-    }
+    const defaults = [
+      { id: 1, name: "Mission_Report_Final.pdf", type: "document", size: 2500, date: "2026-02-12", starred: true },
+      { id: 2, name: "Neural_Net_v9.json", type: "code", size: 14, date: "2026-02-11", starred: false },
+      { id: 3, name: "Tokyo_Night_Walk.jpg", type: "image", size: 4200, date: "2026-02-10", starred: false },
+      { id: 4, name: "lofi_coding_mix.mp3", type: "audio", size: 8500, date: "2026-02-09", starred: true },
+      { id: 5, name: "Server_Backups.zip", type: "document", size: 156000, date: "2026-02-08", starred: false },
+      { id: 6, name: "UI_Kit_v2.fig", type: "image", size: 12500, date: "2026-02-07", starred: true },
+      { id: 7, name: "Launch_Sequence.mp4", type: "video", size: 450000, date: "2026-02-06", starred: false },
+      { id: 8, name: "secret_keys.env", type: "code", size: 2, date: "2026-02-05", starred: true },
+    ];
+    setFiles(defaults);
   }, []);
 
-  const saveVault = (newFiles) => {
-    setFiles(newFiles);
-    localStorage.setItem("soumo_vault_pro", JSON.stringify(newFiles));
-  };
+  // --- CLICK OUTSIDE TO CLOSE MENUS ---
+  useEffect(() => {
+    const handleClick = () => setContextMenu({ ...contextMenu, visible: false });
+    window.addEventListener("click", handleClick);
+    return () => window.removeEventListener("click", handleClick);
+  }, [contextMenu]);
 
-  // --- ACTIONS ---
-  const handleUpload = (e) => {
-    const fileList = Array.from(e.target.files || e.dataTransfer.files);
-    if (!fileList.length) return;
-
-    setUploading(true);
-    
-    // Process each file
-    const newFiles = [];
-    let processed = 0;
-
-    fileList.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        newFiles.push({
-          id: Date.now() + Math.random(),
-          name: file.name,
-          type: file.type || "unknown",
-          size: file.size,
-          parentId: currentFolder,
-          date: new Date().toISOString(),
-          content: event.target.result,
-          starred: false,
-          trash: false
-        });
-        processed++;
-        if (processed === fileList.length) {
-          setTimeout(() => { // Fake encryption delay
-            saveVault([...files, ...newFiles]);
-            setUploading(false);
-          }, 1500);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const createFolder = () => {
-    const name = prompt("Folder Name:");
-    if (!name) return;
-    const newFolder = {
-      id: Date.now().toString(),
-      name,
-      type: "folder",
-      parentId: currentFolder,
-      date: new Date().toISOString(),
-      trash: false
-    };
-    saveVault([...files, newFolder]);
-  };
-
-  const deleteItem = (id) => {
-    // If in trash, delete permanently. If not, move to trash.
-    if (navSection === 'trash') {
-      if(confirm("Permanently delete? This cannot be undone.")) {
-        // Recursive delete for folders not implemented for simplicity, just deleting item
-        saveVault(files.filter(f => f.id !== id));
-        setSelectedId(null);
-      }
-    } else {
-      saveVault(files.map(f => f.id === id ? { ...f, trash: true } : f));
-      setSelectedId(null);
-    }
-  };
-
-  const restoreItem = (id) => {
-    saveVault(files.map(f => f.id === id ? { ...f, trash: false } : f));
-  };
-
-  const toggleStar = (e, id) => {
-    e.stopPropagation();
-    saveVault(files.map(f => f.id === id ? { ...f, starred: !f.starred } : f));
-  };
-
-  // --- VIEW LOGIC ---
-  const getBreadcrumbs = () => {
-    const path = [];
-    let curr = files.find(f => f.id === currentFolder);
-    while (curr) {
-      path.unshift(curr);
-      curr = files.find(f => f.id === curr.parentId);
-    }
-    return path;
-  };
-
-  const filteredFiles = useMemo(() => {
-    let list = files.filter(f => {
-      // 1. Trash Filter
-      if (navSection === 'trash') return f.trash;
-      if (f.trash) return false;
-
-      // 2. Section Logic
-      if (navSection === 'recent') return true; // Will sort later
-      if (navSection === 'starred') return f.starred;
-      
-      // 3. Folder Navigation
-      return f.parentId === currentFolder;
+  // --- FILTERING ENGINE ---
+  const filteredFiles = files
+    .filter(file => {
+      // 1. Category Filter
+      if (activeCategory === "Recent") return true; // Show all sorted by date
+      if (activeCategory === "Starred") return file.starred;
+      if (activeCategory === "Trash") return false; // Mock trash
+      if (activeCategory === "Documents") return file.type === "document";
+      if (activeCategory === "Media") return ["image", "video", "audio"].includes(file.type);
+      return true;
+    })
+    .filter(file => file.name.toLowerCase().includes(searchQuery.toLowerCase())) // 2. Search Filter
+    .sort((a, b) => { // 3. Sorting
+        if (sortBy === "name") return a.name.localeCompare(b.name);
+        if (sortBy === "size") return b.size - a.size;
+        return new Date(b.date) - new Date(a.date); // Default: Date
     });
 
-    // Search Filter
-    if (search) {
-      list = files.filter(f => !f.trash && f.name.toLowerCase().includes(search.toLowerCase()));
-    }
+  // --- HANDLERS ---
+  const handleRightClick = (e, fileId) => {
+    e.preventDefault();
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY, fileId });
+  };
 
-    // Sort
-    if (navSection === 'recent') {
-      return list.sort((a, b) => new Date(b.date) - new Date(a.date));
-    }
-    
-    // Folders first, then files
-    return list.sort((a, b) => {
-      if (a.type === 'folder' && b.type !== 'folder') return -1;
-      if (a.type !== 'folder' && b.type === 'folder') return 1;
-      return 0;
-    });
-  }, [files, currentFolder, navSection, search]);
+  const formatSize = (kb) => {
+      if (kb > 1000) return `${(kb/1000).toFixed(1)} MB`;
+      return `${kb} KB`;
+  };
 
-  const selectedFile = files.find(f => f.id === selectedId);
-  const totalSize = (files.reduce((acc, f) => acc + (f.size || 0), 0) / 1024 / 1024).toFixed(2);
-
-  // --- DRAG & DROP ---
-  const handleDragOver = (e) => { e.preventDefault(); };
-  const handleDrop = (e) => { e.preventDefault(); handleUpload(e); };
+  // --- NAVIGATION CONFIG ---
+  const navItems = [
+    { id: "All", icon: <HardDrive size={18}/>, label: "My Vault" },
+    { id: "Recent", icon: <Clock size={18}/>, label: "Recent" },
+    { id: "Starred", icon: <Star size={18}/>, label: "Starred" },
+    { type: "divider" },
+    { id: "Documents", icon: <FileText size={18}/>, label: "Documents" },
+    { id: "Media", icon: <ImageIcon size={18}/>, label: "Media" },
+    { type: "divider" },
+    { id: "Trash", icon: <Trash2 size={18}/>, label: "Trash" },
+  ];
 
   return (
-    <div className="w-full h-full bg-[#050505] text-gray-200 font-sans flex overflow-hidden" onDragOver={handleDragOver} onDrop={handleDrop}>
+    <div className="w-full h-full bg-[#050505] flex flex-col md:flex-row text-gray-300 font-sans relative overflow-hidden">
       
-      {/* 1. SIDEBAR NAVIGATION */}
-      <div className="w-64 bg-[#0a0a0a] border-r border-white/5 flex flex-col p-4">
-        <div className="flex items-center gap-3 px-2 mb-8 mt-2">
-          <div className="w-10 h-10 bg-green-600/20 rounded-xl flex items-center justify-center border border-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
-            <HardDrive className="text-green-500 w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">Vault</h1>
-            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Secure Cloud</span>
-          </div>
+      {/* 1. MOBILE TOP BAR */}
+      <div className="md:hidden h-16 shrink-0 border-b border-white/10 flex items-center justify-between px-4 bg-[#0a0a0a] z-30">
+        <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(true)} className="p-2 active:bg-white/10 rounded-lg">
+                <Menu size={24} className="text-white"/>
+            </button>
+            <span className="font-bold text-white text-lg">Vault</span>
         </div>
-
-        <button onClick={() => fileInputRef.current.click()} className="flex items-center justify-center gap-2 bg-white text-black p-3 rounded-xl font-bold hover:bg-gray-200 transition-all shadow-lg mb-6 group">
-          <Upload size={18} className="group-hover:-translate-y-1 transition-transform"/> Upload
+        <button className="bg-blue-600 text-white w-9 h-9 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/20">
+             <Plus size={20}/>
         </button>
-        <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleUpload} />
-
-        <div className="space-y-1 flex-1">
-          <NavBtn icon={<HardDrive/>} label="My Vault" active={navSection==='files'} onClick={()=>{setNavSection('files'); setCurrentFolder('root'); setSearch('')}} />
-          <NavBtn icon={<Clock/>} label="Recent" active={navSection==='recent'} onClick={()=>{setNavSection('recent'); setSearch('')}} />
-          <NavBtn icon={<Star/>} label="Starred" active={navSection==='starred'} onClick={()=>{setNavSection('starred'); setSearch('')}} />
-          <NavBtn icon={<Trash2/>} label="Trash" active={navSection==='trash'} onClick={()=>{setNavSection('trash'); setSearch('')}} />
-        </div>
-
-        <div className="mt-auto bg-[#111] p-4 rounded-xl border border-white/5">
-          <div className="flex justify-between text-xs mb-2">
-            <span className="text-gray-400">Storage</span>
-            <span className="text-white font-bold">{totalSize} MB</span>
-          </div>
-          <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
-            <div className="h-full bg-green-500 w-[10%]"></div>
-          </div>
-        </div>
       </div>
 
-      {/* 2. MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#0a0a0a]">
-        
-        {/* Header / Toolbar */}
-        <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#0a0a0a]/80 backdrop-blur z-10">
-          
-          {/* Breadcrumbs / Title */}
-          <div className="flex items-center gap-2 overflow-hidden">
-            {navSection === 'files' && !search ? (
-              <>
-                {currentFolder !== 'root' && (
-                  <button onClick={() => setCurrentFolder(files.find(f => f.id === currentFolder)?.parentId || 'root')} className="p-1 hover:bg-white/10 rounded-full mr-2">
-                    <ArrowLeft size={18}/>
-                  </button>
-                )}
-                <div className="flex items-center text-sm font-medium text-gray-400">
-                  {getBreadcrumbs().map((folder, i) => (
-                    <div key={folder.id} className="flex items-center">
-                      {i > 0 && <ChevronRight size={14} className="mx-1 opacity-50"/>}
-                      <span 
-                        onClick={() => setCurrentFolder(folder.id)}
-                        className={`cursor-pointer hover:text-white ${i === getBreadcrumbs().length - 1 ? 'text-white font-bold' : ''}`}
-                      >
-                        {folder.name}
-                      </span>
-                    </div>
-                  ))}
+      {/* 2. SIDEBAR (Adaptive) */}
+      
+      {/* Dimmer */}
+      <div className={`fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity duration-300 md:hidden ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setSidebarOpen(false)}></div>
+
+      {/* Panel */}
+      <div className={`
+        fixed md:relative z-50 top-0 left-0 h-full w-[280px] md:w-64 bg-[#0a0a0a] border-r border-white/5 
+        transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] md:translate-x-0 flex flex-col
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        {/* Desktop Logo */}
+        <div className="hidden md:flex h-20 items-center px-6 border-b border-white/5">
+          <div className="flex items-center gap-3 text-white font-bold text-xl">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-blue-500/20 shadow-lg">
+                <Cloud size={18} className="text-white"/>
+            </div>
+            <span>Vault</span>
+          </div>
+        </div>
+
+        {/* Mobile Close Header */}
+        <div className="md:hidden p-4 flex items-center justify-between border-b border-white/5 bg-[#0f0f0f]">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Navigation</span>
+            <button onClick={() => setSidebarOpen(false)}><X size={20}/></button>
+        </div>
+
+        {/* Scrollable Nav */}
+        <div className="p-4 space-y-1 overflow-y-auto flex-1">
+            <button className="w-full bg-white text-black py-3 rounded-xl font-bold text-sm mb-6 hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 shadow-lg">
+                <Plus size={16} strokeWidth={3}/> New Upload
+            </button>
+
+            {navItems.map((item, i) => (
+                item.type === "divider" ? (
+                    <div key={i} className="h-px bg-white/5 my-2 mx-4"></div>
+                ) : (
+                    <button 
+                        key={item.id}
+                        onClick={() => { setActiveCategory(item.id); setSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all text-sm font-medium group
+                            ${activeCategory === item.id ? 'bg-blue-500/10 text-blue-400' : 'text-gray-400 hover:bg-white/5 hover:text-white'}
+                        `}
+                    >
+                        <div className={activeCategory === item.id ? 'text-blue-400' : 'text-gray-500 group-hover:text-white'}>
+                            {item.icon}
+                        </div>
+                        <span>{item.label}</span>
+                        {activeCategory === item.id && <ChevronRight size={14} className="ml-auto opacity-50"/>}
+                    </button>
+                )
+            ))}
+
+            {/* Storage Widget */}
+            <div className="mt-8 bg-[#111] border border-white/5 p-4 rounded-xl">
+                <div className="flex justify-between text-xs mb-2">
+                    <span className="text-gray-400">Storage</span>
+                    <span className="text-white font-bold">{storageStats.used} GB</span>
                 </div>
-              </>
-            ) : (
-              <h2 className="text-xl font-bold text-white capitalize flex items-center gap-2">
-                {navSection} {search && `/ Search: "${search}"`}
-              </h2>
-            )}
-          </div>
-
-          {/* Search & Layout Toggles */}
-          <div className="flex items-center gap-4">
-            <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 group-focus-within:text-white transition-colors"/>
-              <input 
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search files..." 
-                className="bg-[#151515] border border-transparent focus:border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white outline-none w-64 transition-all"
-              />
+                <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 w-[50%] rounded-full"></div>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-2">50% of 128GB Used</p>
             </div>
-            <div className="flex bg-[#151515] rounded-lg p-1 border border-white/5">
-              <button onClick={() => setView('grid')} className={`p-1.5 rounded ${view === 'grid' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}><Grid size={16}/></button>
-              <button onClick={() => setView('list')} className={`p-1.5 rounded ${view === 'list' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-300'}`}><List size={16}/></button>
-            </div>
-            {navSection === 'files' && !search && (
-              <button onClick={createFolder} className="p-2 hover:bg-white/10 rounded-full text-gray-400 hover:text-white transition-colors" title="New Folder">
-                <Folder size={20} />
-              </button>
-            )}
-          </div>
         </div>
 
-        {/* File Grid / List */}
-        <div className="flex-1 overflow-y-auto p-6" onClick={() => setSelectedId(null)}>
-          
-          {uploading && (
-            <div className="mb-6 bg-green-900/10 border border-green-500/20 rounded-xl p-4 flex items-center gap-4 animate-pulse">
-              <Lock className="text-green-500"/>
-              <div>
-                <h3 className="text-green-400 font-bold text-sm">Encrypting & Uploading...</h3>
-                <p className="text-green-500/60 text-xs">Securing data blocks via AES-256</p>
-              </div>
+        {/* User Footer */}
+        <div className="p-4 border-t border-white/5">
+            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors">
+                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-xs font-bold text-white">SP</div>
+                <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-white">Soumoditya</div>
+                    <div className="text-[10px] text-gray-500">Admin</div>
+                </div>
+                <Settings size={14} className="text-gray-500"/>
             </div>
-          )}
-
-          {filteredFiles.length === 0 && !uploading && (
-            <div className="h-full flex flex-col items-center justify-center text-gray-600 opacity-50">
-              <Folder size={64} className="mb-4 stroke-1"/>
-              <p>Folder is empty</p>
-            </div>
-          )}
-
-          {view === 'grid' ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {filteredFiles.map(file => (
-                <FileCard 
-                  key={file.id} 
-                  file={file} 
-                  selected={selectedId === file.id}
-                  onSelect={(e) => { e.stopPropagation(); setSelectedId(file.id); }}
-                  onNavigate={(id) => { setCurrentFolder(id); setSearch(''); }}
-                  onContextMenu={(e) => { e.preventDefault(); /* Would open context menu */ }}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              <div className="flex px-4 py-2 text-xs font-bold text-gray-500 uppercase border-b border-white/5">
-                <span className="flex-1">Name</span>
-                <span className="w-32">Date Modified</span>
-                <span className="w-24">Size</span>
-              </div>
-              {filteredFiles.map(file => (
-                <FileListRow 
-                  key={file.id} 
-                  file={file} 
-                  selected={selectedId === file.id}
-                  onSelect={(e) => { e.stopPropagation(); setSelectedId(file.id); }}
-                  onNavigate={(id) => { setCurrentFolder(id); setSearch(''); }}
-                />
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* 3. INSPECTOR PANEL (Right Sidebar) */}
-      {selectedFile && (
-        <div className="w-80 bg-[#0a0a0a] border-l border-white/5 flex flex-col animate-slide-in-right">
-          <div className="h-16 flex items-center justify-between px-6 border-b border-white/5">
-            <span className="font-bold text-white">Details</span>
-            <button onClick={() => setSelectedId(null)} className="text-gray-500 hover:text-white"><X size={18}/></button>
-          </div>
-          
-          <div className="p-6 flex-1 overflow-y-auto">
-            {/* Preview */}
-            <div className="aspect-square bg-[#111] rounded-2xl mb-6 flex items-center justify-center border border-white/5 overflow-hidden">
-              {selectedFile.type.startsWith("image/") ? (
-                <img src={selectedFile.content} className="w-full h-full object-cover" />
-              ) : selectedFile.type === 'folder' ? (
-                <Folder size={64} className="text-blue-500"/>
-              ) : (
-                <FileText size={64} className="text-gray-500"/>
-              )}
-            </div>
+      {/* 3. MAIN CONTENT */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#050505]">
+           
+           {/* Desktop Toolbar */}
+           <div className="hidden md:flex h-20 items-center justify-between px-8 border-b border-white/5 shrink-0">
+               <div>
+                   <h1 className="text-2xl font-bold text-white tracking-tight">{activeCategory}</h1>
+                   <p className="text-xs text-gray-500 mt-1">{filteredFiles.length} files • Synced just now</p>
+               </div>
+               <div className="flex items-center gap-3">
+                   {/* Search Bar */}
+                   <div className="relative group">
+                       <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-white transition-colors"/>
+                       <input 
+                         value={searchQuery}
+                         onChange={(e) => setSearchQuery(e.target.value)}
+                         placeholder="Search files..." 
+                         className="bg-[#111] border border-white/10 rounded-full py-2 pl-9 pr-4 text-sm text-white focus:border-blue-500/50 outline-none w-64 transition-all focus:w-80 placeholder:text-gray-600"
+                       />
+                   </div>
+                   <div className="h-8 w-px bg-white/10 mx-2"></div>
+                   <button onClick={() => setSortBy(sortBy === 'date' ? 'size' : 'date')} className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white" title="Sort">
+                       <SortAsc size={20}/>
+                   </button>
+                   <button className="p-2 hover:bg-white/5 rounded-lg text-gray-400 hover:text-white"><Filter size={20}/></button>
+               </div>
+           </div>
 
-            {/* Meta */}
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-xl font-bold text-white break-all mb-1">{selectedFile.name}</h3>
-                <span className="text-xs text-blue-400 bg-blue-900/20 px-2 py-1 rounded border border-blue-500/20 uppercase font-bold">{selectedFile.type === 'folder' ? 'Folder' : selectedFile.type.split('/')[1] || 'Unknown'}</span>
-              </div>
+           {/* Content Grid */}
+           <div className="flex-1 overflow-y-auto p-4 md:p-8">
+               
+               {/* Mobile Search (Only visible on phone) */}
+               <div className="md:hidden mb-6">
+                 <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"/>
+                    <input 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search..." 
+                        className="w-full bg-[#111] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-sm text-white outline-none"
+                    />
+                 </div>
+               </div>
 
-              <div className="space-y-3">
-                <MetaRow label="Size" value={selectedFile.type === 'folder' ? '-' : (selectedFile.size / 1024).toFixed(1) + ' KB'} />
-                <MetaRow label="Modified" value={new Date(selectedFile.date).toLocaleDateString()} />
-                <MetaRow label="Path" value={selectedFile.parentId === 'root' ? 'My Vault' : '...'} />
-              </div>
-            </div>
-          </div>
+               {/* QUICK ACCESS (Recent) */}
+               {activeCategory === "All" && !searchQuery && (
+                   <div className="mb-8">
+                       <h3 className="text-xs font-bold text-gray-500 mb-4 uppercase tracking-wider px-1">Quick Access</h3>
+                       <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+                           {files.slice(0, 4).map(file => (
+                               <div key={`quick-${file.id}`} className="min-w-[140px] md:min-w-[160px] bg-[#111] border border-white/5 p-4 rounded-xl hover:bg-[#161616] hover:border-blue-500/30 transition-all cursor-pointer group shadow-lg">
+                                   <div className={`w-10 h-10 rounded-lg ${getFileColor(file.type)} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                                       {getFileIcon(file.type)}
+                                   </div>
+                                   <div className="text-xs font-bold text-white truncate">{file.name}</div>
+                                   <div className="text-[10px] text-gray-500 mt-1">{formatSize(file.size)}</div>
+                               </div>
+                           ))}
+                       </div>
+                   </div>
+               )}
 
-          {/* Actions Footer */}
-          <div className="p-4 border-t border-white/5 grid grid-cols-2 gap-2">
-            <button onClick={(e) => toggleStar(e, selectedFile.id)} className={`flex items-center justify-center gap-2 p-3 rounded-xl font-bold transition-colors ${selectedFile.starred ? 'bg-yellow-500/20 text-yellow-500' : 'bg-[#151515] text-gray-400 hover:text-white'}`}>
-              <Star size={18} fill={selectedFile.starred ? "currentColor" : "none"}/>
-              {selectedFile.starred ? 'Starred' : 'Star'}
+               {/* ALL FILES GRID */}
+               <div className="mb-4 flex items-center justify-between px-1">
+                   <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">All Files</h3>
+                   <span className="text-[10px] text-gray-600">{filteredFiles.length} items</span>
+               </div>
+
+               {filteredFiles.length === 0 ? (
+                   <div className="flex flex-col items-center justify-center py-20 text-gray-600">
+                       <Cloud size={48} className="mb-4 opacity-20"/>
+                       <p>No files found</p>
+                   </div>
+               ) : (
+                   <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                      {filteredFiles.map(file => (
+                        <div 
+                            key={file.id} 
+                            onContextMenu={(e) => handleRightClick(e, file.id)}
+                            className="group bg-[#0a0a0a] border border-white/5 p-3 rounded-xl hover:bg-[#111] hover:border-white/10 transition-all cursor-pointer relative"
+                        >
+                            {/* Desktop Hover Actions */}
+                            <div className="hidden md:flex absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity gap-1">
+                                <button className="p-1.5 bg-black/60 hover:bg-blue-600 rounded-md text-white backdrop-blur-md transition-colors"><Download size={12}/></button>
+                                <button className="p-1.5 bg-black/60 hover:bg-white/20 rounded-md text-white backdrop-blur-md transition-colors"><MoreVertical size={12}/></button>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-lg ${getFileColor(file.type)} flex items-center justify-center shrink-0`}>
+                                    {getFileIcon(file.type)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-medium text-gray-200 truncate group-hover:text-blue-400 transition-colors">{file.name}</div>
+                                    <div className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-2">
+                                        <span>{formatSize(file.size)}</span>
+                                        {file.starred && <Star size={8} className="text-yellow-500 fill-yellow-500"/>}
+                                    </div>
+                                </div>
+                                {/* Mobile More Button */}
+                                <button className="md:hidden text-gray-600 p-2"><MoreVertical size={16}/></button>
+                            </div>
+                        </div>
+                      ))}
+                   </div>
+               )}
+
+               {/* Scrolling Spacer */}
+               <div className="h-24 md:h-0"></div>
+           </div>
+      </div>
+
+      {/* --- 4. CUSTOM CONTEXT MENU (The "Hacker" Touch) --- */}
+      {contextMenu.visible && (
+        <div 
+            className="fixed z-[100] bg-[#1a1a1a] border border-white/10 rounded-lg shadow-2xl py-1 w-40 animate-fade-in"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+            <button className="w-full text-left px-4 py-2 text-xs text-white hover:bg-blue-600 transition-colors flex items-center gap-2">
+                <FileText size={12}/> Open
             </button>
-            <button onClick={() => deleteItem(selectedFile.id)} className="flex items-center justify-center gap-2 p-3 rounded-xl bg-red-900/10 text-red-500 font-bold hover:bg-red-900/20 transition-colors">
-              <Trash2 size={18}/> {navSection === 'trash' ? 'Delete' : 'Trash'}
+            <button className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/10 transition-colors flex items-center gap-2">
+                <Star size={12}/> Star
             </button>
-            {navSection === 'trash' && (
-               <button onClick={() => restoreItem(selectedFile.id)} className="col-span-2 bg-[#151515] text-white p-3 rounded-xl font-bold hover:bg-[#202020]">Restore</button>
-            )}
-            {selectedFile.type.startsWith("image/") && navSection !== 'trash' && (
-               <a href={selectedFile.content} download={selectedFile.name} className="col-span-2 bg-white text-black p-3 rounded-xl font-bold hover:bg-gray-200 flex items-center justify-center gap-2">
-                 <Download size={18}/> Download
-               </a>
-            )}
-          </div>
+            <button className="w-full text-left px-4 py-2 text-xs text-white hover:bg-white/10 transition-colors flex items-center gap-2">
+                <Shield size={12}/> Encrypt
+            </button>
+            <div className="h-px bg-white/10 my-1"></div>
+            <button className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2">
+                <Trash2 size={12}/> Delete
+            </button>
         </div>
       )}
 
@@ -375,68 +311,19 @@ export default function Vault() {
   );
 }
 
-// --- SUB-COMPONENTS ---
-
-function NavBtn({ icon, label, active, onClick }) {
-  return (
-    <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium ${active ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-      {React.cloneElement(icon, { size: 18, className: active ? 'text-green-400' : '' })}
-      {label}
-    </button>
-  )
+// --- HELPER FUNCTIONS ---
+function getFileIcon(type) {
+    if (type === 'image') return <ImageIcon size={18} />;
+    if (type === 'video') return <Video size={18} />;
+    if (type === 'audio') return <Music size={18} />;
+    if (type === 'code') return <File size={18} />;
+    return <FileText size={18} />;
 }
 
-function FileCard({ file, selected, onSelect, onNavigate }) {
-  const isImg = file.type.startsWith("image/");
-  const isFolder = file.type === 'folder';
-
-  return (
-    <div 
-      onClick={onSelect}
-      onDoubleClick={() => isFolder && onNavigate(file.id)}
-      className={`group relative aspect-[4/5] rounded-2xl p-3 border transition-all cursor-pointer flex flex-col ${selected ? 'bg-blue-600/10 border-blue-500 ring-1 ring-blue-500' : 'bg-[#151515] border-white/5 hover:bg-[#1a1a1a] hover:border-white/10'}`}
-    >
-      <div className="flex-1 flex items-center justify-center mb-2 overflow-hidden rounded-xl bg-black/20">
-        {isImg ? (
-          <img src={file.content} className="w-full h-full object-cover" />
-        ) : isFolder ? (
-          <Folder size={48} className="text-blue-500 fill-blue-500/20" />
-        ) : (
-          <FileText size={48} className="text-gray-600" />
-        )}
-      </div>
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium text-gray-200 truncate w-full">{file.name}</span>
-        {file.starred && <Star size={12} className="text-yellow-500 flex-shrink-0 mt-1" fill="currentColor"/>}
-      </div>
-      <div className="text-[10px] text-gray-600 mt-1">{isFolder ? 'Folder' : (file.size/1024).toFixed(0)+' KB'}</div>
-    </div>
-  )
+function getFileColor(type) {
+    if (type === 'image') return "bg-purple-500/10 text-purple-400";
+    if (type === 'video') return "bg-red-500/10 text-red-400";
+    if (type === 'audio') return "bg-yellow-500/10 text-yellow-400";
+    if (type === 'code') return "bg-green-500/10 text-green-400";
+    return "bg-blue-500/10 text-blue-400";
 }
-
-function FileListRow({ file, selected, onSelect, onNavigate }) {
-  const isFolder = file.type === 'folder';
-  return (
-    <div 
-      onClick={onSelect}
-      onDoubleClick={() => isFolder && onNavigate(file.id)}
-      className={`flex items-center gap-4 p-3 rounded-lg cursor-pointer border transition-colors ${selected ? 'bg-blue-600/10 border-blue-500/50' : 'border-transparent hover:bg-[#151515]'}`}
-    >
-      {isFolder ? <Folder size={20} className="text-blue-500"/> : <FileText size={20} className="text-gray-500"/>}
-      <span className="text-sm text-gray-200 flex-1 truncate">{file.name}</span>
-      <span className="text-xs text-gray-500 w-32">{new Date(file.date).toLocaleDateString()}</span>
-      <span className="text-xs text-gray-500 w-24">{isFolder ? '-' : (file.size/1024).toFixed(1)+' KB'}</span>
-    </div>
-  )
-}
-
-function MetaRow({ label, value }) {
-  return (
-    <div className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-gray-300 font-mono">{value}</span>
-    </div>
-  )
-}
-
-const React = require('react');

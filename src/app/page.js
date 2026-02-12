@@ -27,7 +27,6 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState('search');
 
   // --- 1. GLOBAL PATCH SYSTEM (GOD MODE) ---
-  // Runs injected scripts from Code Studio
   useEffect(() => {
     const globalPatch = localStorage.getItem("soumo_global_patch");
     if (globalPatch) {
@@ -41,7 +40,6 @@ export default function Home() {
   }, []);
 
   // --- 2. BROWSER NAVIGATION LOGIC ---
-  // Makes the browser Back button work within the OS
   useEffect(() => {
     if (!isAuthorized) return;
 
@@ -67,7 +65,7 @@ export default function Home() {
   return (
     <main className="h-screen w-full relative bg-[#050505] text-white overflow-hidden selection:bg-blue-500/30 font-sans">
       
-      {/* Background Layer (Targetable by Code Studio via ID) */}
+      {/* Background Layer */}
       <div id="os-background" className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-600/20 rounded-full blur-[120px] animate-blob opacity-40"></div>
         <div className="absolute top-[20%] right-[-10%] w-[400px] h-[400px] bg-blue-600/20 rounded-full blur-[120px] animate-blob animation-delay-2000 opacity-40"></div>
@@ -82,12 +80,13 @@ export default function Home() {
         <div className="relative z-10 h-full flex flex-col animate-fade-in">
           
           {/* THE ROOF: Status Bar */}
-          {/* IMPORTANT: Passing switchApp function so buttons work */}
           <StatusBar onOpenApp={switchApp} />
           
-          {/* App Container */}
-          {/* pt-10 creates space for the transparent status bar */}
-          <div className="flex-1 w-full h-full overflow-hidden relative pt-10">
+          {/* THE "SAFE AREA" CONTAINER (Mobile vs Desktop)
+              - Mobile: overflow-y-auto (Allows scrolling), pb-20 (Padding bottom so Dock doesn't hide content)
+              - Desktop: overflow-hidden (Locks window), pb-0, pt-14 (Space for status bar)
+          */}
+          <div className="flex-1 w-full h-full relative overflow-y-auto overflow-x-hidden md:overflow-hidden pt-12 pb-20 md:pb-0 md:pt-14">
             
             {activeTab === 'search' && (
               <div className="w-full h-full animate-fade-in">
@@ -134,9 +133,16 @@ export default function Home() {
                </div>
             )}
 
+             {activeTab === 'notes' && (
+               <div className="w-full h-full bg-[#1e1e1e] animate-fade-in flex items-center justify-center text-gray-500">
+                  {/* Placeholder if you added notes back, or remove if unused */}
+                  Coming Soon...
+               </div>
+            )}
+
           </div>
 
-          {/* Bottom Dock */}
+          {/* Bottom Dock (Handles switching) */}
           <Dock activeTab={activeTab} setActiveTab={switchApp} />
         </div>
       )}
